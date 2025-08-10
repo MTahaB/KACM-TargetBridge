@@ -1,0 +1,10 @@
+smiles,target,pIC50,ligand
+CC1=CC=CC=C1,ABL1,8.0,Imatinib
+CCOc1ccc2nc(SCc3ccccc3)sc2c1,ABL1,7.5,Nilotinib
+CNC(=O)c1csc(n1)Nc2ccc(cc2)F,ABL1,6.5,Dasatinib
+COc1cc2ncnc(Nc3ccc(Cl)cc3)c2cc1OC,EGFR,8.2,Gefitinib
+COc1ccc2nc(N3CCNCC3)sc2c1,EGFR,7.1,Erlotinib
+COc1cccc2c1nc(N3CCN(CC3)C)nc2N,EGFR,6.8,Afatinib
+CC1=CC=CC=C1C(=O)O,COX-2,5.5,Aspirin
+CC(C)Cc1ccc(cc1)C(C)C(=O)O,COX-2,6.2,Ibuprofen
+CC(C)Cc1ccc(cc1)C(C)C(=O)Nc2ccc(cc2)S(=O)(=O)N,COX-2,7.0,Celecoxib
