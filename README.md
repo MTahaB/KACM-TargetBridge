@@ -220,7 +220,7 @@ OOD(x) = α × novelty(x) + (1-α) × (1 - density(x))
 - **ChEMBL Database**: [Mendez et al., 2019](https://academic.oup.com/nar/article/47/D1/D930/5162468)
 - **Morgan Fingerprints**: [Rogers & Hahn, 2010](https://pubs.acs.org/doi/10.1021/ci100050t)
 
-## 🏆 Built for Excellence (OpenAI-Level Quality)
+## 🏆 Built for Excellence 
 
 - ✅ **Cutting-edge ML** (GP variance, CQR, advanced ensembles)
 - ✅ **Research-level techniques** (Bayesian optimization, multi-objective)  
@@ -232,5 +232,3 @@ OOD(x) = α × novelty(x) + (1-α) × (1 - density(x))
 - ✅ **Reproducible research** (seed control, artifact storage)
 
 ---
-
-*Made with ⚗️ + � + 🌐 for next-generation drug discovery*
