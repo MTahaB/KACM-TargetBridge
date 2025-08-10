@@ -1,5 +1,16 @@
-pandas 
-streamlit
+# Core
 numpy
+pandas
 scikit-learn
+scipy
+joblib
+tqdm
+
+# UI
+streamlit
+
+# Chemistry
 rdkit-pypi
+
+# Viz
+matplotlib
