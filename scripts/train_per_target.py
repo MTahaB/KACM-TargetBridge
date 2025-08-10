@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--cal_pct", type=float, default=0.2)
     ap.add_argument("--ood_tau", type=float, default=0.55, help="Seuil OOD composite (↑ plus OOD)")
     ap.add_argument("--gamma", type=float, default=1.5, help="Amplification adaptative des intervalles")
+    ap.add_argument("--z_gp", type=float, default=1.0, help="poids σ_GP dans l'intervalle hybride")
     args = ap.parse_args()
 
     csv_path = args.csv or f"data/processed/target_{args.chembl_id}.csv"
@@ -53,9 +54,18 @@ def main():
     base = TanimotoKRR(alpha=args.alpha)
     ac = AdaptiveConformalRegressor(model=base, alpha=0.1, gamma=args.gamma, k_dens=8).fit_calibrate(X_tr, y_tr, X_cal, y_cal)
 
-    mu, lo, hi = ac.predict_interval(X_te)
-    picp = float(((y_te >= lo) & (y_te <= hi)).mean())
-    mpiw = float((hi - lo).mean())
+    # Conformal adaptatif
+    mu_c, lo_c, hi_c = ac.predict_interval(X_te)
+    picp = float(((y_te >= lo_c) & (y_te <= hi_c)).mean())
+    mpiw = float((hi_c - lo_c).mean())
+
+    # Variance GP du KRR
+    mu_gp, var_gp = ac.model.predict_mean_var(X_te)
+    sig_gp = np.sqrt(var_gp)
+
+    # Intervalle hybride (affiché dans l'UI si on veut)
+    lo_h = mu_c - args.z_gp * sig_gp
+    hi_h = mu_c + args.z_gp * sig_gp
 
     # Seuil OOD via quantile entraînement (conservateur)
     # On calcule l’OOD composite sur train et fixe tau au 90e percentile si pas fourni
@@ -68,22 +78,28 @@ def main():
     outdir = Path(f"artifacts/{args.chembl_id}")
     outdir.mkdir(parents=True, exist_ok=True)
     pack = {
-        "type": "KRR_Tanimoto_AdaptiveConformal",
+        "type": "KRR_Tanimoto_AdaptiveConformal+GPVar",
         "chembl_id": args.chembl_id,
         "bits": args.bits, "radius": args.radius,
         "alpha": args.alpha,
         "alpha_cp": 0.1,
         "gamma": args.gamma,
         "ood_tau": tau,
-        "model": ac.model,
+        "model": ac.model,            # contient L_ pour variance
         "qhat": ac.qhat_,
         "X_train": X_tr,
         "y_train": y_tr,
-        "neighbors": neigh_db
+        "neighbors": neigh_db,
+        "z_gp": args.z_gp
     }
     save_joblib(outdir / "model.joblib", pack)
-    save_json(outdir / "metrics.json", {"PICP": picp, "MPIW": mpiw, "n_test": int(len(y_te))})
-    print(f"[{args.chembl_id}] PICP={picp:.3f} | MPIW={mpiw:.3f} | OOD_tau≈{tau:.2f} | artifacts -> {outdir}")
+    save_json(outdir / "metrics.json", {
+        "PICP_conformal": picp, 
+        "MPIW_conformal": mpiw,
+        "mean_sigma_gp": float(sig_gp.mean()), 
+        "n_test": int(len(y_te))
+    })
+    print(f"[{args.chembl_id}] PICP={picp:.3f} | MPIW={mpiw:.3f} | σ_GP~{sig_gp.mean():.3f} | OOD_tau≈{tau:.2f} | artifacts -> {outdir}")
 
 if __name__ == "__main__":
     main()
