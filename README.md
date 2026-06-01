@@ -124,7 +124,7 @@ viewer = py3Dmol.view(width=400, height=300)
 viewer.addModel(mol_block, 'mol')
 viewer.setStyle({'stick': {'colorscheme': 'cyanCarbon'}})
 ```
-- **Technology**: py3Dmol + stmol for Streamlit integration
+- **Technology**: py3Dmol embedded with Streamlit's native iframe support
 - **Features**: Rotatable 3D structures, neighbor comparisons
 - **Analysis**: Visual similarity assessment with k-NN neighbors
 
@@ -216,7 +216,7 @@ OOD(x) = α × novelty(x) + (1-α) × (1 - density(x))
 - **Conformal Prediction**: [Shafer & Vovk, 2008](https://alrw.net)
 - **Conformalized Quantile Regression**: [Romano et al., 2019](https://arxiv.org/abs/1905.03222)
 - **Gaussian Process Variance**: [Rasmussen & Williams, 2006](http://gaussianprocess.org/gpml/)
-- **3D Molecular Visualization**: [py3Dmol](https://3dmol.csb.pitt.edu/) + [stmol](https://github.com/napoles-uach/stmol)
+- **3D Molecular Visualization**: [py3Dmol](https://3dmol.csb.pitt.edu/) embedded through Streamlit
 - **ChEMBL Database**: [Mendez et al., 2019](https://academic.oup.com/nar/article/47/D1/D930/5162468)
 - **Morgan Fingerprints**: [Rogers & Hahn, 2010](https://pubs.acs.org/doi/10.1021/ci100050t)
 

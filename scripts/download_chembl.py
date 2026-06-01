@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 BASE_URL = "https://www.ebi.ac.uk/chembl/api/data/activity"
 
+
 def fetch_activities(chembl_target_id: str, page_size: int = 1000) -> pd.DataFrame:
     keep_types = {"IC50", "KI", "KD"}
     params = {
@@ -22,24 +23,42 @@ def fetch_activities(chembl_target_id: str, page_size: int = 1000) -> pd.DataFra
 
     frames = []
     for p in tqdm(range(pages), desc=f"Downloading {chembl_target_id}"):
-        rp = requests.get(BASE_URL, params=params | {"offset": p * page_size}, timeout=60)
+        rp = requests.get(
+            BASE_URL, params=params | {"offset": p * page_size}, timeout=60
+        )
         rp.raise_for_status()
         dp = rp.json()
         recs = dp.get("activities", [])
         if not recs:
             continue
         df = pd.DataFrame.from_records(recs)
-        cols = ["canonical_smiles", "standard_value", "standard_units", "standard_type"]
-        df = df[[c for c in cols if c in df.columns]].copy()
-        df.columns = ["smiles", "value", "units", "type"]
+        required = {
+            "canonical_smiles",
+            "standard_value",
+            "standard_units",
+            "standard_type",
+        }
+        if not required.issubset(df.columns):
+            continue
+        df = df.rename(
+            columns={
+                "canonical_smiles": "smiles",
+                "standard_value": "value",
+                "standard_units": "units",
+                "standard_type": "type",
+            }
+        )[["smiles", "value", "units", "type"]].copy()
+        df["type"] = df["type"].astype(str).str.upper()
         df = df[df["type"].isin(keep_types)].dropna(subset=["smiles", "value", "units"])
         frames.append(df)
     if not frames:
-        return pd.DataFrame(columns=["smiles","value","units","type"])
+        return pd.DataFrame(columns=["smiles", "value", "units", "type"])
     return pd.concat(frames, ignore_index=True)
 
+
 def to_pIC50(row):
-    v, u = row["value"], (row["units"] or "").strip().upper()
+    v = row["value"]
+    u = str(row["units"] or "").strip().replace("µ", "U").replace("μ", "U").upper()
     try:
         v = float(v)
     except:
@@ -50,7 +69,9 @@ def to_pIC50(row):
     if conv is None:
         return None
     import math
+
     return -math.log10(v * conv)
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -69,7 +90,8 @@ def main():
     Path(args.outdir).mkdir(parents=True, exist_ok=True)
     out = Path(args.outdir) / f"target_{args.chembl_id}.csv"
     df.to_csv(out, index=False)
-    print(f"Wrote {out} — {len(df)} rows")
+    print(f"Wrote {out} - {len(df)} rows")
+
 
 if __name__ == "__main__":
     main()

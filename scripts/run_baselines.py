@@ -1,12 +1,19 @@
 import argparse
+import sys
 import numpy as np, pandas as pd
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from sklearn.model_selection import train_test_split
 from src.data.split import scaffold_split
 from src.featurization.fingerprints import featurize_smiles_list
 from src.models.knn_baseline import KNNRegressorTanimoto
 from src.utils.io import save_json
 from scipy.stats import spearmanr
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -21,11 +28,17 @@ def main():
     df = pd.read_csv(csv_path).dropna(subset=["smiles", "pIC50"]).reset_index(drop=True)
 
     train_mask, test_mask = scaffold_split(df, "smiles", test_frac=0.2, seed=42)
-    df_train, df_test = df[train_mask].reset_index(drop=True), df[test_mask].reset_index(drop=True)
+    df_train, df_test = df[train_mask].reset_index(drop=True), df[
+        test_mask
+    ].reset_index(drop=True)
 
-    X_tr, keep_tr = featurize_smiles_list(df_train["smiles"].tolist(), n_bits=args.bits, radius=args.radius)
+    X_tr, keep_tr = featurize_smiles_list(
+        df_train["smiles"].tolist(), n_bits=args.bits, radius=args.radius
+    )
     y_tr = df_train["pIC50"].values[keep_tr]
-    X_te, keep_te = featurize_smiles_list(df_test["smiles"].tolist(), n_bits=args.bits, radius=args.radius)
+    X_te, keep_te = featurize_smiles_list(
+        df_test["smiles"].tolist(), n_bits=args.bits, radius=args.radius
+    )
     y_te = df_test["pIC50"].values[keep_te]
 
     knn = KNNRegressorTanimoto(k=args.k).fit(X_tr, y_tr)
@@ -35,8 +48,15 @@ def main():
 
     outdir = Path(f"artifacts/{args.chembl_id}")
     outdir.mkdir(parents=True, exist_ok=True)
-    save_json(outdir / f"baseline_knn_k{args.k}.json", {"spearman_rho": float(rho), "mae": mae, "n_test": int(len(y_te))})
-    print(f"[{args.chembl_id}] kNN k={args.k} | Spearman ρ={float(rho):.3f} | MAE={mae:.3f} | n={len(y_te)}")
+    save_json(
+        outdir / f"baseline_knn_k{args.k}.json",
+        {"spearman_rho": float(rho), "mae": mae, "n_test": int(len(y_te))},
+    )
+    print(
+        f"[{args.chembl_id}] kNN k={args.k} | "
+        f"Spearman rho={float(rho):.3f} | MAE={mae:.3f} | n={len(y_te)}"
+    )
+
 
 if __name__ == "__main__":
     main()

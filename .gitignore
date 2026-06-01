@@ -1,5 +1,6 @@
 myenv/
 .myenv
+.venv/
 src/featurization/__pycache__/
 src/data/__pycache__/
 src/__pycache__/
