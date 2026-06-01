@@ -1,5 +1,6 @@
 import numpy as np
 from dataclasses import dataclass
+from typing import Any
 from src.featurization.ood import density_score
 
 
@@ -19,7 +20,7 @@ class AdaptiveConformalRegressor:
     on calibre sur |resid| / s(x_cal), puis à l’inférence on multiplie q̂ par s(x).
     """
 
-    model: any
+    model: Any
     alpha: float = 0.1
     gamma: float = 1.5
     k_dens: int = 8

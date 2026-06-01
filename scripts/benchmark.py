@@ -37,6 +37,11 @@ TARGET_METADATA = {
     },
 }
 DEFAULT_MODELS = ["knn", "random_forest", "krr_conformal", "cqr"]
+FEATURE_SET_LABELS = {
+    "morgan": "Morgan binary fingerprint",
+    "morgan_rdkit": "Morgan binary fingerprint + RDKit descriptors",
+}
+TANIMOTO_FEATURE_LABEL = "Morgan binary fingerprint (Tanimoto kernel)"
 
 
 def endpoint_column(endpoint: str) -> str:
@@ -79,8 +84,19 @@ def scaffold_count(smiles):
     return len(set(scaffolds))
 
 
-def featurize_split(df: pd.DataFrame, y_col: str, bits: int, radius: int):
-    X, keep = featurize_smiles_list(df["smiles"].tolist(), n_bits=bits, radius=radius)
+def featurize_split(
+    df: pd.DataFrame,
+    y_col: str,
+    bits: int,
+    radius: int,
+    feature_set: str,
+):
+    X, keep = featurize_smiles_list(
+        df["smiles"].tolist(),
+        n_bits=bits,
+        radius=radius,
+        feature_set=feature_set,
+    )
     y = df[y_col].to_numpy(dtype=float)[keep]
     smiles = df["smiles"].to_numpy()[keep]
     return X, y, smiles
@@ -101,8 +117,53 @@ def metric_row(y_true, y_pred, lo=None, hi=None):
     return row
 
 
-def base_row(args, target_id, endpoint, y_col, df, splits, split_scaffolds, model):
+def calibration_rows(
+    target_id: str,
+    model: str,
+    y_true: np.ndarray,
+    lo: np.ndarray,
+    hi: np.ndarray,
+    n_bins: int = 5,
+) -> list[dict[str, float | int | str]]:
+    """Compute empirical coverage by interval-width bin."""
+    widths = hi - lo
+    edges = np.quantile(widths, np.linspace(0.0, 1.0, n_bins + 1))
+    rows = []
+    for bin_id in range(n_bins):
+        if bin_id == n_bins - 1:
+            mask = (widths >= edges[bin_id]) & (widths <= edges[bin_id + 1])
+        else:
+            mask = (widths >= edges[bin_id]) & (widths < edges[bin_id + 1])
+        if not np.any(mask):
+            continue
+        rows.append(
+            {
+                "target_chembl_id": target_id,
+                "model": model,
+                "bin": bin_id,
+                "n": int(mask.sum()),
+                "mean_width": float(widths[mask].mean()),
+                "empirical_coverage": float(
+                    ((y_true[mask] >= lo[mask]) & (y_true[mask] <= hi[mask])).mean()
+                ),
+            }
+        )
+    return rows
+
+
+def base_row(
+    args,
+    target_id,
+    endpoint,
+    y_col,
+    df,
+    splits,
+    split_scaffolds,
+    model,
+    feature_set: str | None = None,
+):
     metadata = TARGET_METADATA.get(target_id, {})
+    feature_set = feature_set or args.feature_set
     return {
         "target_chembl_id": target_id,
         "target_name": metadata.get("target_name", ""),
@@ -122,7 +183,8 @@ def base_row(args, target_id, endpoint, y_col, df, splits, split_scaffolds, mode
         "seed": int(args.seed),
         "test_frac": float(args.test_frac),
         "cal_frac": float(args.cal_frac),
-        "fingerprint": "Morgan binary fingerprint",
+        "feature_set": feature_set,
+        "fingerprint": FEATURE_SET_LABELS.get(feature_set, feature_set),
         "bits": int(args.bits),
         "radius": int(args.radius),
         "model": model,
@@ -137,9 +199,28 @@ def run_models(args, target_id: str):
         df, seed=args.seed, test_frac=args.test_frac, cal_frac=args.cal_frac
     )
 
-    X_train, y_train, _ = featurize_split(df_train, y_col, args.bits, args.radius)
-    X_cal, y_cal, _ = featurize_split(df_cal, y_col, args.bits, args.radius)
-    X_test, y_test, _ = featurize_split(df_test, y_col, args.bits, args.radius)
+    X_train, y_train, _ = featurize_split(
+        df_train, y_col, args.bits, args.radius, "morgan"
+    )
+    X_cal, y_cal, _ = featurize_split(df_cal, y_col, args.bits, args.radius, "morgan")
+    X_test, y_test, _ = featurize_split(
+        df_test, y_col, args.bits, args.radius, "morgan"
+    )
+
+    if args.feature_set == "morgan":
+        X_train_ml, y_train_ml = X_train.astype(float), y_train
+        X_cal_ml, y_cal_ml = X_cal.astype(float), y_cal
+        X_test_ml, y_test_ml = X_test.astype(float), y_test
+    else:
+        X_train_ml, y_train_ml, _ = featurize_split(
+            df_train, y_col, args.bits, args.radius, args.feature_set
+        )
+        X_cal_ml, y_cal_ml, _ = featurize_split(
+            df_cal, y_col, args.bits, args.radius, args.feature_set
+        )
+        X_test_ml, y_test_ml, _ = featurize_split(
+            df_test, y_col, args.bits, args.radius, args.feature_set
+        )
 
     splits = {
         "train": len(y_train),
@@ -153,6 +234,7 @@ def run_models(args, target_id: str):
     }
 
     rows = []
+    cal_rows = []
     models = set(args.models)
 
     if "knn" in models:
@@ -168,7 +250,9 @@ def run_models(args, target_id: str):
             splits,
             split_scaffolds,
             "k-NN",
+            feature_set="morgan",
         )
+        row["fingerprint"] = TANIMOTO_FEATURE_LABEL
         row.update(metric_row(y_test, pred))
         row["runtime_seconds"] = round(time.perf_counter() - start, 3)
         rows.append(row)
@@ -181,8 +265,8 @@ def run_models(args, target_id: str):
             min_samples_leaf=args.rf_min_samples_leaf,
             random_state=args.seed,
             n_jobs=-1,
-        ).fit(X_train.astype(float), y_train)
-        pred = model.predict(X_test.astype(float))
+        ).fit(X_train_ml, y_train_ml)
+        pred = model.predict(X_test_ml)
         row = base_row(
             args,
             target_id,
@@ -193,7 +277,7 @@ def run_models(args, target_id: str):
             split_scaffolds,
             "Random Forest",
         )
-        row.update(metric_row(y_test, pred))
+        row.update(metric_row(y_test_ml, pred))
         row["runtime_seconds"] = round(time.perf_counter() - start, 3)
         rows.append(row)
 
@@ -216,17 +300,20 @@ def run_models(args, target_id: str):
             splits,
             split_scaffolds,
             "KRR-Conformal",
+            feature_set="morgan",
         )
+        row["fingerprint"] = TANIMOTO_FEATURE_LABEL
         row.update(metric_row(y_test, pred, lo, hi))
         row["runtime_seconds"] = round(time.perf_counter() - start, 3)
         rows.append(row)
+        cal_rows.extend(calibration_rows(target_id, "KRR-Conformal", y_test, lo, hi))
 
     if "cqr" in models:
         start = time.perf_counter()
         model = CQR(alpha=args.miscoverage).fit(
-            X_train.astype(float), y_train, X_cal.astype(float), y_cal
+            X_train_ml, y_train_ml, X_cal_ml, y_cal_ml
         )
-        pred, lo, hi = model.predict_interval(X_test.astype(float))
+        pred, lo, hi = model.predict_interval(X_test_ml)
         row = base_row(
             args,
             target_id,
@@ -237,9 +324,10 @@ def run_models(args, target_id: str):
             split_scaffolds,
             "CQR",
         )
-        row.update(metric_row(y_test, pred, lo, hi))
+        row.update(metric_row(y_test_ml, pred, lo, hi))
         row["runtime_seconds"] = round(time.perf_counter() - start, 3)
         rows.append(row)
+        cal_rows.extend(calibration_rows(target_id, "CQR", y_test_ml, lo, hi))
 
     if "xgboost" in models:
         start = time.perf_counter()
@@ -254,8 +342,8 @@ def run_models(args, target_id: str):
             objective="reg:squarederror",
             random_state=args.seed,
             n_jobs=-1,
-        ).fit(X_train.astype(float), y_train)
-        pred = model.predict(X_test.astype(float))
+        ).fit(X_train_ml, y_train_ml)
+        pred = model.predict(X_test_ml)
         row = base_row(
             args,
             target_id,
@@ -266,11 +354,11 @@ def run_models(args, target_id: str):
             split_scaffolds,
             "XGBoost",
         )
-        row.update(metric_row(y_test, pred))
+        row.update(metric_row(y_test_ml, pred))
         row["runtime_seconds"] = round(time.perf_counter() - start, 3)
         rows.append(row)
 
-    return rows
+    return rows, cal_rows
 
 
 def main():
@@ -287,6 +375,15 @@ def main():
     parser.add_argument("--out", default="results/benchmark_results.csv")
     parser.add_argument("--bits", type=int, default=2048)
     parser.add_argument("--radius", type=int, default=2)
+    parser.add_argument(
+        "--feature_set",
+        default="morgan",
+        choices=sorted(FEATURE_SET_LABELS),
+        help=(
+            "Features for dense learners. Tanimoto k-NN and KRR-Conformal always "
+            "use Morgan fingerprints."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--test_frac", type=float, default=0.2)
     parser.add_argument("--cal_frac", type=float, default=0.2)
@@ -308,15 +405,22 @@ def main():
         raise ValueError(f"Unknown model names: {invalid}")
 
     rows = []
+    calibration = []
     for target_id in args.targets:
         print(f"Benchmarking {target_id} {args.endpoint.upper()}")
-        rows.extend(run_models(args, target_id))
+        target_rows, target_calibration = run_models(args, target_id)
+        rows.extend(target_rows)
+        calibration.extend(target_calibration)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     results = pd.DataFrame(rows)
     results.to_csv(out, index=False)
     print(f"Wrote {out} - {len(results)} rows")
+
+    calibration_out = out.with_name("calibration_curves.csv")
+    pd.DataFrame(calibration).to_csv(calibration_out, index=False)
+    print(f"Wrote {calibration_out} - {len(calibration)} rows")
 
 
 if __name__ == "__main__":

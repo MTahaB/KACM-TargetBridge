@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Union, List, Tuple
+from typing import Optional, List, Tuple
 from rdkit import Chem, DataStructs
 from rdkit.Chem import Descriptors, rdMolDescriptors, AllChem
 from rdkit.Chem.Pharm2D import Generate, Gobbi_Pharm2D
@@ -83,7 +83,7 @@ def rdkit_2d_descriptors(smiles: str) -> Optional[np.ndarray]:
                 Descriptors.MinAbsEStateIndex(mol),
             ]
         )
-    except:
+    except Exception:
         descriptors.extend([0.0, 0.0, 0.0, 0.0])
 
     return np.array(descriptors, dtype=np.float32)
@@ -104,7 +104,7 @@ def pharmacophore_fingerprint(smiles: str, n_bits: int = 2048) -> Optional[np.nd
             arr[int(bit) % n_bits] = 1
 
         return arr
-    except:
+    except Exception:
         # Fallback to zeros if pharmacophore generation fails
         return np.zeros(n_bits, dtype=np.uint8)
 

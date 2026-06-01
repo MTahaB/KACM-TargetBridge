@@ -3,14 +3,15 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 from src.featurization.ood import tanimoto_sim_matrix
 
+
 @dataclass
 class TanimotoKRR:
     alpha: float = 1.0
-    X_train_: Optional[np.ndarray] = None   # bool matrix (n,d)
+    X_train_: Optional[np.ndarray] = None  # bool matrix (n,d)
     y_train_: Optional[np.ndarray] = None
-    L_: Optional[np.ndarray] = None         # Cholesky of (K + alpha I)
-    alpha_vec_: Optional[np.ndarray] = None # (K + alpha I)^{-1} y
-    k_self_: float = 1.0                    # k(x,x) for Tanimoto on binary bits ~ 1.0
+    L_: Optional[np.ndarray] = None  # Cholesky of (K + alpha I)
+    alpha_vec_: Optional[np.ndarray] = None  # (K + alpha I)^{-1} y
+    k_self_: float = 1.0  # k(x,x) for Tanimoto on binary bits ~ 1.0
 
     def fit(self, X: np.ndarray, y: np.ndarray):
         Xb = X.astype(bool)
@@ -37,7 +38,7 @@ class TanimotoKRR:
 
     def predict_mean_var(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Retourne μ(x), σ^2(x) façon GP (bruit = alpha)."""
-        k_star = self._k_star(X)              # (m,n)
+        k_star = self._k_star(X)  # (m,n)
         # v = L^{-1} k_star^T
         v = np.linalg.solve(self.L_, k_star.T)  # (n,m)
         mu = k_star @ self.alpha_vec_

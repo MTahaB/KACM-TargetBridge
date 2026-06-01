@@ -2,6 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 from src.featurization.ood import tanimoto_sim_matrix
 
+
 @dataclass
 class KNNRegressorTanimoto:
     k: int = 5

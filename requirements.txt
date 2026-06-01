@@ -1,34 +1,27 @@
-# Core ML Stack
-numpy>=1.24.0
-pandas>=2.0.0
-scikit-learn>=1.3.0
-scipy>=1.10.0
-joblib>=1.3.0
+# Pinned runtime dependencies. For a full transitive lock, see requirements.lock.
+numpy==2.4.6
+pandas==3.0.3
+scikit-learn==1.8.0
+scipy==1.17.1
+joblib==1.5.3
+xgboost==3.2.0
+lightgbm==4.6.0
+tqdm==4.67.3
+click==8.4.1
+rdkit==2026.3.2
+requests==2.34.2
+streamlit==1.58.0
+matplotlib==3.10.9
+seaborn==0.13.2
+plotly==6.7.0
+py3Dmol==2.5.5
+optuna==4.9.0
+hyperopt==0.2.7
 
-# Advanced ML
-xgboost>=1.7.0
-lightgbm>=4.0.0
-
-# Progress & Utilities
-tqdm>=4.65.0
-click>=8.1.0
-
-# Chemistry & Drug Discovery
-rdkit>=2025.3.1
-requests>=2.31.0
-
-# Visualization & UI
-streamlit>=1.58.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-plotly>=5.15.0
-py3Dmol>=2.0.0  # 3D molecular visualization
-
-# Optimization & Statistics
-optuna>=3.3.0  # For advanced hyperparameter optimization
-hyperopt>=0.2.7  # Alternative optimization framework
-
-# Development & Quality
-black>=23.0.0
-flake8>=6.0.0
-pytest>=7.4.0
+# Development
+black==26.5.1
+flake8==7.3.0
+pytest==9.0.3
+mypy==1.18.2
+nbformat==5.10.4
+pip-tools==7.5.2

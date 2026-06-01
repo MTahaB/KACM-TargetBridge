@@ -1,5 +1,6 @@
 import numpy as np
 from dataclasses import dataclass
+from typing import Any
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 
@@ -20,8 +21,8 @@ class CQR:
     """
 
     alpha: float = 0.1
-    lq_: any = None
-    uq_: any = None
+    lq_: Any = None
+    uq_: Any = None
     qhat_: float | None = None
     qhat_lo_: float | None = None
     qhat_hi_: float | None = None

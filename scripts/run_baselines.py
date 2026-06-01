@@ -1,18 +1,19 @@
 import argparse
 import sys
-import numpy as np, pandas as pd
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sklearn.model_selection import train_test_split
-from src.data.split import scaffold_split
-from src.featurization.fingerprints import featurize_smiles_list
-from src.models.knn_baseline import KNNRegressorTanimoto
-from src.utils.io import save_json
-from scipy.stats import spearmanr
+from src.data.split import scaffold_split  # noqa: E402
+from src.featurization.fingerprints import featurize_smiles_list  # noqa: E402
+from src.models.knn_baseline import KNNRegressorTanimoto  # noqa: E402
+from src.utils.io import save_json  # noqa: E402
 
 ENDPOINT_COLUMNS = {"IC50": "pIC50", "KI": "pKi", "KD": "pKd"}
 

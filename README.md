@@ -16,13 +16,13 @@ All numeric values reported in this README are taken from
 ```text
 scripts/download_chembl.py        Download one target and one endpoint from ChEMBL
 scripts/benchmark.py              Run all benchmark models on shared splits
-scripts/train_per_target.py       Train KRR-conformal artifacts for the Streamlit app
-scripts/train_per_target_cqr.py   Train CQR artifacts for the Streamlit app
+scripts/train_per_target.py       Train app artifacts with --method krr|cqr|ensemble
 src/data/split.py                 Murcko scaffold split utilities
 src/featurization/                Molecular fingerprints and OOD utilities
 src/models/                       k-NN, KRR, conformal, CQR, and ensemble code
 src/ui/app.py                     Streamlit prediction interface
 results/benchmark_results.csv     Benchmark outputs used by this README
+notebooks/demo_end_to_end.ipynb   Portfolio-style end-to-end demonstration
 ```
 
 ## Data Definition
@@ -92,9 +92,28 @@ shift.
 Create an environment and install dependencies:
 
 ```bash
-python -m venv .venv
-.venv/Scripts/activate
-pip install -r requirements.txt
+python -m venv myenv
+
+# Windows PowerShell
+myenv\Scripts\Activate.ps1
+
+# Windows cmd
+myenv\Scripts\activate.bat
+
+# Linux/macOS
+source myenv/bin/activate
+
+pip install -r requirements.lock
+```
+
+The project also defines package metadata in `pyproject.toml`. Direct runtime and
+development dependencies are pinned in `requirements.txt`; the transitive lock
+is generated with `pip-compile` and stored in `requirements.lock`.
+
+To refresh the lock after editing `pyproject.toml`, run:
+
+```bash
+python -m piptools compile pyproject.toml --extra dev --output-file requirements.lock --cache-dir .cache/pip-tools
 ```
 
 Download IC50-only data:
@@ -111,6 +130,12 @@ Run the shared-split benchmark:
 python scripts/benchmark.py --targets CHEMBL203 CHEMBL1862 CHEMBL217 --endpoint IC50 --out results/benchmark_results.csv
 ```
 
+The benchmark script also writes `results/calibration_curves.csv` when rerun,
+with empirical interval coverage by interval-width bin for reliability diagrams.
+Dense learners can additionally use RDKit molecular descriptors with
+`--feature_set morgan_rdkit`; Tanimoto k-NN and KRR-Conformal remain on Morgan
+fingerprints for kernel consistency.
+
 ## Streamlit Interface
 
 The Streamlit app loads trained artifacts from `artifacts/`. Those files are
@@ -118,12 +143,12 @@ generated outputs and are not tracked in Git. To regenerate app artifacts for th
 IC50 endpoint, run:
 
 ```bash
-python scripts/train_per_target.py --chembl_id CHEMBL203 --endpoint IC50
-python scripts/train_per_target.py --chembl_id CHEMBL1862 --endpoint IC50
-python scripts/train_per_target.py --chembl_id CHEMBL217 --endpoint IC50
-python scripts/train_per_target_cqr.py --chembl_id CHEMBL203 --endpoint IC50
-python scripts/train_per_target_cqr.py --chembl_id CHEMBL1862 --endpoint IC50
-python scripts/train_per_target_cqr.py --chembl_id CHEMBL217 --endpoint IC50
+python scripts/train_per_target.py --chembl_id CHEMBL203 --endpoint IC50 --method krr
+python scripts/train_per_target.py --chembl_id CHEMBL203 --endpoint IC50 --method cqr
+python scripts/train_per_target.py --chembl_id CHEMBL1862 --endpoint IC50 --method krr
+python scripts/train_per_target.py --chembl_id CHEMBL1862 --endpoint IC50 --method cqr
+python scripts/train_per_target.py --chembl_id CHEMBL217 --endpoint IC50 --method krr
+python scripts/train_per_target.py --chembl_id CHEMBL217 --endpoint IC50 --method cqr
 ```
 
 Then launch:
@@ -131,6 +156,39 @@ Then launch:
 ```bash
 streamlit run src/ui/app.py
 ```
+
+The UI discovers any local ChEMBL artifact directory under `artifacts/` and also
+accepts manually entered ChEMBL IDs. Prediction exports are available as CSV and
+SDF, including intervals, score, and OOD values.
+
+For CQR artifacts, `scripts/train_per_target.py` also accepts
+`--feature_set morgan_rdkit`. KRR and the current stacked ensemble use Morgan
+fingerprints because both include Tanimoto-based components.
+
+## Docker
+
+Build and run the Streamlit application:
+
+```bash
+docker build -t kacm-targetbridge .
+docker run --rm -p 8501:8501 kacm-targetbridge
+```
+
+Generated data and artifacts are excluded from the image by default. Mount them
+when needed, for example with `-v "$PWD/artifacts:/app/artifacts"`.
+
+## Development
+
+Run local checks:
+
+```bash
+python -m black src scripts tests
+python -m flake8 src scripts tests
+python -m mypy src
+python -m pytest
+```
+
+GitHub Actions runs linting, type checking, and tests on pull requests.
 
 ## Limitations
 
@@ -149,3 +207,7 @@ fingerprint-based predictions are not conflated.
 
 An optional structure-based EGFR docking protocol is outlined in
 [`docs/structure_based_extension.md`](docs/structure_based_extension.md).
+
+An experimental target-aware multi-task Ridge model is provided in
+`src/models/multitask.py`. It is intended as a baseline for exploring target
+sharing, not as a replacement for the per-target benchmark above.
