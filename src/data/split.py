@@ -1,12 +1,25 @@
-import numpy as np, pandas as pd
+import hashlib
 from typing import Tuple
+
+import numpy as np
+import pandas as pd
 from rdkit import RDLogger
 from src.utils.chem import murcko_scaffold_smiles
 
 RDLogger.DisableLog("rdApp.*")
 
-def scaffold_split(df: pd.DataFrame, smiles_col="smiles", test_frac=0.2, seed=42) -> Tuple[np.ndarray, np.ndarray]:
-    scaffolds = df[smiles_col].map(lambda s: murcko_scaffold_smiles(s) or f"NOSCAF_{hash(s)%10_000_000}")
+
+def _stable_noscaffold_id(smiles: str) -> str:
+    digest = hashlib.sha1(str(smiles).encode("utf-8")).hexdigest()[:12]
+    return f"NOSCAF_{digest}"
+
+
+def scaffold_split(
+    df: pd.DataFrame, smiles_col="smiles", test_frac=0.2, seed=42
+) -> Tuple[np.ndarray, np.ndarray]:
+    scaffolds = df[smiles_col].map(
+        lambda s: murcko_scaffold_smiles(s) or _stable_noscaffold_id(s)
+    )
     groups = scaffolds.groupby(scaffolds).indices  # dict scaffold -> indices
     rng = np.random.default_rng(seed)
     keys = list(groups.keys())

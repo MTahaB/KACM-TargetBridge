@@ -15,6 +15,8 @@ from src.models.conformal import AdaptiveConformalRegressor
 from src.featurization.ood import ood_composite, tanimoto_sim_matrix
 from src.utils.io import save_joblib, save_json
 
+ENDPOINT_COLUMNS = {"IC50": "pIC50", "KI": "pKi", "KD": "pKd"}
+
 
 def build_neighbors_db(smiles_list, X, y, topk=3):
     """Prépare un mini index pour l'explication kNN (renvoyé en UI)."""
@@ -29,7 +31,10 @@ def build_neighbors_db(smiles_list, X, y, topk=3):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--chembl_id", required=True)
-    ap.add_argument("--csv", default=None, help="Optional CSV: smiles,pIC50")
+    ap.add_argument("--endpoint", default="IC50", choices=sorted(ENDPOINT_COLUMNS))
+    ap.add_argument(
+        "--csv", default=None, help="Optional CSV with smiles and endpoint column"
+    )
     ap.add_argument("--bits", type=int, default=2048)
     ap.add_argument("--radius", type=int, default=2)
     ap.add_argument("--alpha", type=float, default=1.0)
@@ -51,8 +56,10 @@ def main():
     )
     args = ap.parse_args()
 
-    csv_path = args.csv or f"data/processed/target_{args.chembl_id}.csv"
-    df = pd.read_csv(csv_path).dropna(subset=["smiles", "pIC50"]).reset_index(drop=True)
+    endpoint = args.endpoint.upper()
+    y_col = ENDPOINT_COLUMNS[endpoint]
+    csv_path = args.csv or f"data/processed/target_{args.chembl_id}_{endpoint}.csv"
+    df = pd.read_csv(csv_path).dropna(subset=["smiles", y_col]).reset_index(drop=True)
 
     # Split scaffold pour crédibilité
     train_mask, test_mask = scaffold_split(df, "smiles", test_frac=0.2, seed=42)
@@ -65,18 +72,18 @@ def main():
     X_tr, keep_tr = featurize_smiles_list(
         df_tr["smiles"].tolist(), n_bits=args.bits, radius=args.radius
     )
-    y_tr = df_tr["pIC50"].values[keep_tr]
+    y_tr = df_tr[y_col].values[keep_tr]
     smiles_tr = df_tr["smiles"].values[keep_tr]
 
     X_cal, keep_cal = featurize_smiles_list(
         df_cal["smiles"].tolist(), n_bits=args.bits, radius=args.radius
     )
-    y_cal = df_cal["pIC50"].values[keep_cal]
+    y_cal = df_cal[y_col].values[keep_cal]
 
     X_te, keep_te = featurize_smiles_list(
         df_test["smiles"].tolist(), n_bits=args.bits, radius=args.radius
     )
-    y_te = df_test["pIC50"].values[keep_te]
+    y_te = df_test[y_col].values[keep_te]
 
     # Entraînement + Conformal adaptatif
     base = TanimotoKRR(alpha=args.alpha)
@@ -112,6 +119,7 @@ def main():
     pack = {
         "type": "KRR_Tanimoto_AdaptiveConformal+GPVar",
         "chembl_id": args.chembl_id,
+        "endpoint": y_col,
         "bits": args.bits,
         "radius": args.radius,
         "alpha": args.alpha,

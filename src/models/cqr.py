@@ -15,8 +15,8 @@ def conformal_quantile(scores: np.ndarray, alpha: float) -> float:
 class CQR:
     """Conformalized Quantile Regression with HistGradientBoostingRegressor.
 
-    Advanced technique combining quantile regression with conformal prediction
-    for sharper intervals while maintaining coverage guarantees.
+    Combines quantile regression with conformal calibration. Coverage should be
+    evaluated empirically under the split used for a given experiment.
     """
 
     alpha: float = 0.1

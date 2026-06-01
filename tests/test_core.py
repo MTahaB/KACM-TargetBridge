@@ -1,5 +1,8 @@
 import numpy as np
+import pandas as pd
 
+from scripts.download_chembl import activity_to_pvalue, prepare_endpoint_table
+from src.data.split import scaffold_split
 from src.featurization.advanced_features import (
     atom_pair_fingerprint,
     layered_fingerprint,
@@ -44,3 +47,43 @@ def test_advanced_rdkit_features_have_stable_shapes():
     assert atom_pair_fingerprint(smiles, n_bits=128).shape == (128,)
     assert topological_torsion_fp(smiles, n_bits=128).shape == (128,)
     assert layered_fingerprint(smiles, n_bits=128).shape == (128,)
+
+
+def test_download_preparation_keeps_endpoints_separate():
+    raw = pd.DataFrame(
+        {
+            "molecule_chembl_id": ["CHEMBL1", "CHEMBL1"],
+            "smiles": ["CCO", "CCO"],
+            "value": [100.0, 1000.0],
+            "units": ["nM", "nM"],
+            "activity_type": ["IC50", "IC50"],
+            "relation": ["=", "="],
+        }
+    )
+
+    table = prepare_endpoint_table(raw, "CHEMBL203", "IC50")
+
+    assert list(table.columns) == [
+        "smiles",
+        "pIC50",
+        "target_chembl_id",
+        "endpoint",
+        "n_measurements",
+    ]
+    assert table.loc[0, "pIC50"] == np.median([7.0, 6.0])
+    assert table.loc[0, "endpoint"] == "pIC50"
+
+
+def test_activity_conversion_handles_micro_molar_units():
+    assert activity_to_pvalue(1.0, "uM") == 6.0
+    assert activity_to_pvalue(1.0, "\u00b5M") == 6.0
+
+
+def test_scaffold_split_is_reproducible_for_noscaffold_molecules():
+    df = pd.DataFrame({"smiles": ["C", "CC", "CCC", "CCCC", "CCCCC"]})
+
+    train_a, test_a = scaffold_split(df, seed=7)
+    train_b, test_b = scaffold_split(df, seed=7)
+
+    np.testing.assert_array_equal(train_a, train_b)
+    np.testing.assert_array_equal(test_a, test_b)
